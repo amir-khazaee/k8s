@@ -25,7 +25,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: registry.hamdocker.ir/amir-cloud/yarp-front:latest
+          image: docker.io/mainorg/yarp-front:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

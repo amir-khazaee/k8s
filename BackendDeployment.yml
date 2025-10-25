@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: yarp
-          image: registry.hamdocker.ir/amir-cloud/yarp-backend:latest
+          image: docker.io/mainorg/yarp-backend:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: ASPNETCORE_ENVIRONMENT
