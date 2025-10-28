@@ -1,0 +1,53 @@
+name: gitlab
+services:
+  gitlab:
+    image: gitlab/gitlab-ce:18.5.1-ce.0  
+    container_name: gitlab
+    restart: always
+    hostname: gitlab.amitis.local
+    shm_size: '512m'                     
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |          
+        external_url "https://gitlab.amitis.local"  
+        gitlab_rails['initial_root_password'] = "@Gitlab@dmin"
+        gitlab_rails['display_initial_root_password'] = "false"
+        gitlab_rails['store_initial_root_password'] = "false"
+
+        gitlab_rails['registry_enabled'] = true
+        registry_external_url "https://gitlab.amitis.local:5050"
+        # Provide the paths to your TLS certificate and key (mounted in /etc/gitlab/ssl):
+        nginx['ssl_certificate'] = "/etc/gitlab/ssl/gitlab.amitis.local.crt"
+        nginx['ssl_certificate_key'] = "/etc/gitlab/ssl/gitlab.amitis.local.key"
+        registry_nginx['ssl_certificate'] = "/etc/gitlab/ssl/gitlab.amitis.local.crt"
+        registry_nginx['ssl_certificate_key'] = "/etc/gitlab/ssl/gitlab.amitis.local.key"
+        prometheus['enable'] = false
+        node_exporter['listen_address'] = '0.0.0.0:9100'
+        gitlab_workhorse['prometheus_listen_addr'] = '0.0.0.0:9229'
+        gitlab_exporter['listen_address'] = '0.0.0.0'
+        gitlab_exporter['listen_port'] = '9168'
+        registry['debug_addr'] = '0.0.0.0:5001'
+        redis_exporter['listen_address'] = '0.0.0.0:9121'
+        postgres_exporter['listen_address'] = '0.0.0.0:9187'
+        gitaly['configuration'] = { prometheus_listen_addr: '0.0.0.0:9236' }
+    ports:
+      - "80:80"        
+      - "443:443"      
+      - "22:22"        
+      - "5050:5050"    
+      - "9100:9100"  
+      - "9168:9168"  
+      - "9187:9187"  
+      - "9121:9121"  
+      - "9236:9236"  
+      - "9229:9229"  
+    volumes:
+      - gitlab_backup:/var/opt/gitlab/backups
+      - gitlab_data:/var/opt/gitlab
+      - gitlab_logs:/var/log/gitlab
+      - gitlab_config:/etc/gitlab            
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsSLk https://localhost/-/readiness || curl -fsSL http://127.0.0.1:8080/-/readiness"]  
+      interval: 1m30s
+      timeout: 30s
+      retries: 3
+      start_period: 5m 

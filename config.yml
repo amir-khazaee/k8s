@@ -1,0 +1,164 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-njs-scripts
+  namespace: ingress-nginx  # use the same namespace where ingress controller runs
+data:
+  jwt.js: |
+    // Export the getUserId function for NGINX to use
+    export default { getUserId, getUserName };
+
+    function b64UrlToB64(s) {
+      return s.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(s.length/4)*4, '=');
+    }
+
+    function atobSafe(input) {
+    // Try native atob (if present), otherwise fallback to manual decode
+      try {
+          if (typeof atob === 'function') {
+            return atob(input);
+          }
+      } catch (e) {
+        // fall through
+      }
+    // manual base64 decode (simple)
+      var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+      var str = input.replace(/=+$/, '');
+      var output = '';
+      for (var bc = 0, bs, buffer, i = 0; buffer = str.charAt(i++); ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ? output += String.fromCharCode(255 & bs >> ( -2 * bc & 6 )) : 0) {
+          buffer = chars.indexOf(buffer);
+      }
+     return output;
+    }
+
+    function utf8Decode(bytesStr) {
+      try {
+          // percent-decode trick
+          return decodeURIComponent(bytesStr.split('').map(function(c){
+          return '%' + ('0' + c.charCodeAt(0).toString(16)).slice(-2);
+          }).join(''));
+      } catch (e) {
+          return bytesStr;
+      }
+    }
+
+    function base64UrlDecodeToString(b64url) {
+      try {
+          var b64 = b64UrlToB64(b64url);
+          var raw = atobSafe(b64);
+          return utf8Decode(raw);
+      } catch (e) {
+          return null;
+      }
+    }
+
+    function safeJsonParse(s) {
+      try { return JSON.parse(s); } catch(e) { return null; }
+    }
+
+    function parseCookieHeader(cookieHeader, name) {
+      if (!cookieHeader) return '';
+      // cookieHeader like "a=1; b=2; c=3"
+      var pairs = cookieHeader.split(';');
+      for (var i = 0; i < pairs.length; i++) {
+          var kv = pairs[i].trim();
+          var eq = kv.indexOf('=');
+          if (eq === -1) continue;
+          var k = kv.substring(0, eq).trim();
+          var v = kv.substring(eq + 1).trim();
+          if (k === name) return v;
+     }
+      return '';
+    }
+
+    function getTokenFromRequest(r) {
+       if (!r || !r.headersIn) return null;
+
+    // 1) explicit header YSAuthorization (case-insensitive)
+        var h = r.headersIn['YSAuthorization'] || r.headersIn['ysauthorization'] || r.headersIn['YSauthorization'] || r.headersIn['authorization'] || r.headersIn['Authorization'];
+        if (h && h.length) {
+           var m = h.match(/^\s*Bearer\s+(.+)$/i);
+            if (m) return m[1].trim();
+            return h.trim();
+        }
+
+    // 2) cookie named YSAuthorization (check cookie header)
+        var cookieHeader = r.headersIn['cookie'] || r.headersIn['Cookie'] || '';
+        var cookieToken = parseCookieHeader(cookieHeader, 'YSAuthorization');
+        if (cookieToken) {
+        // cookie may include "Bearer ..." or the raw token
+           var mc = cookieToken.match(/^\s*Bearer\s+(.+)$/i);
+           if (mc) return mc[1].trim();
+           return cookieToken.trim();
+       }
+
+    // 3) fallback: x-ysauthorization header
+        var xh = r.headersIn['x-ysauthorization'] || r.headersIn['X-YSAuthorization'] || '';
+        if (xh && xh.length) {
+            var mx = xh.match(/^\s*Bearer\s+(.+)$/i);
+            if (mx) return mx[1].trim();
+            return xh.trim();
+        }
+
+        return null;
+    }
+
+    function getUserId(r) {
+        try {
+           var token = getTokenFromRequest(r);
+            if (!token) return '';
+
+            var parts = token.split('.');
+            if (!parts || parts.length < 2) return '';
+
+            var payloadB64Url = parts[1];
+            if (!payloadB64Url) return '';
+
+           var payloadJson = base64UrlDecodeToString(payloadB64Url);
+            if (!payloadJson) return '';
+
+            var payload = safeJsonParse(payloadJson);
+           if (!payload) return '';
+
+        // prefer common claim names; convert to string
+            var uid = payload.userId !== undefined ? payload.userId
+                    : payload.user_id !== undefined ? payload.user_id
+                    : payload.uid !== undefined ? payload.uid
+                   : payload.sub !== undefined ? payload.sub
+                    : '';
+
+            if (uid === null || uid === undefined) return '';
+           return (typeof uid === 'string') ? uid : String(uid);
+       } catch (e) {
+            return '';
+        }
+    }
+
+    function getUserName(r) {
+        try {
+            var token = getTokenFromRequest(r);
+            if (!token) return '';
+
+            var parts = token.split('.');
+            if (!parts || parts.length < 2) return '';
+
+            var payloadB64Url = parts[1];
+           if (!payloadB64Url) return '';
+
+           var payloadJson = base64UrlDecodeToString(payloadB64Url);
+           if (!payloadJson) return '';
+
+            var payload = safeJsonParse(payloadJson);
+            if (!payload) return '';
+
+        // prefer field `userName`, fallback to `username`
+            var name = payload.userName !== undefined ? payload.userName
+                     : payload.username !== undefined ? payload.username
+                     : '';
+
+           if (name === null || name === undefined) return '';
+            return (typeof name === 'string') ? name : String(name);
+        } catch (e) {
+            return '';
+       }
+    }
