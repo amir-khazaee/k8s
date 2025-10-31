@@ -1,31 +1,31 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: yarp-front
+  name: yarp-frontend
   namespace: backend
   labels:
-    app: yarp-front
+    app: yarp-frontend
 spec:
   replicas: 2
   revisionHistoryLimit: 3
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0   # do not take any ready pod down until a new one is ready
-      maxSurge: 1         # add at most 1 extra pod during the rollout
+      maxUnavailable: 0   
+      maxSurge: 1         
   minReadySeconds: 10      
   progressDeadlineSeconds: 60  
   selector:
     matchLabels:
-      app: yarp-front
+      app: yarp-frontend
   template:
     metadata:
       labels:
-        app: yarp-front
+        app: yarp-frontend
     spec:
       containers:
-        - name: web
-          image: docker.io/mainorg/yarp-front:latest
+        - name: yarp-frontend
+          image: gitlab.amitis.local:5050/a.khazaei/yarp-frontend:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

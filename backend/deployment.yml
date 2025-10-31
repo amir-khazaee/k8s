@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: yarp
+  name: yarp-backend
   namespace: backend
   labels:
-    app: yarp
+    app: yarp-backend
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: yarp
+      app: yarp-backend
   template:
     metadata:
       labels:
-        app: yarp
+        app: yarp-backend
     spec:
       containers:
-        - name: yarp
-          image: docker.io/mainorg/yarp-backend:latest
+        - name: yarp-backend
+          image: gitlab.amitis.local:5050/a.khazaei/yarp-backend:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: ASPNETCORE_ENVIRONMENT
@@ -30,24 +30,23 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-            - name: https-admin
-              containerPort: 8081
+
           resources:
             requests:
               cpu: "512m"      
               memory: "512Mi"
-          readinessProbe:
-           httpGet:
-             path: /health
-             port: 8081
-             scheme: HTTPS   
-           periodSeconds: 30
-           timeoutSeconds: 5
-          livenessProbe:
-           httpGet:
-             path: /health
-             port: 8081
-             scheme: HTTPS   
-          initialDelaySeconds: 30
-          periodSeconds: 30
-          timeoutSeconds: 5
+          # readinessProbe:
+          #  httpGet:
+          #    path: /health
+          #    port: 8081
+          #    scheme: HTTPS   
+          #  periodSeconds: 30
+          #  timeoutSeconds: 5
+          # livenessProbe:
+          #  httpGet:
+          #    path: /health
+          #    port: 8081
+          #    scheme: HTTPS   
+          # initialDelaySeconds: 30
+          # periodSeconds: 30
+          # timeoutSeconds: 5

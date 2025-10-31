@@ -1,0 +1,50 @@
+stages:
+  - build
+  - deploy
+
+
+build-and-push:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  only:
+    - RC
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - IMAGE_TAG="$CI_COMMIT_SHORT_SHA"
+    - echo "Building $CI_REGISTRY_IMAGE:$IMAGE_TAG"
+    - docker build -t "$CI_REGISTRY_IMAGE:$IMAGE_TAG" .
+    - docker push "$CI_REGISTRY_IMAGE:$IMAGE_TAG"
+    - docker tag "$CI_REGISTRY_IMAGE:$IMAGE_TAG" "$CI_REGISTRY_IMAGE:latest"
+    - docker push "$CI_REGISTRY_IMAGE:latest"
+
+
+update-argocd:
+  stage: deploy
+  image: alpine:latest
+  only:
+    - RC
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - apk add --no-cache git yq
+    - echo "Cloning ArgoCD repository"
+    - git clone "https://oauth2:$GITLAB_TOKEN@$CI_SERVER_HOST/a.khazaei/backend-argocd.git"
+    - cd argocd
+    - git checkout master
+    - echo "Updating image field for container 'yarp-backend' in deployment.yml"
+    - yq -i '(.spec.template.spec.containers[] | select(.name == "yarp-backend").image) = strenv(CI_REGISTRY_IMAGE) + ":" + strenv(CI_COMMIT_SHORT_SHA)' deployment.yml
+    - git add deployment.yml
+    - if git diff --cached --quiet; then
+        echo "No change to deployment.yml (image already at ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}); skipping commit.";
+      else
+        git config user.email "ci@example.com";
+        git config user.name "GitLab CI";
+        git commit -m "Update image to ${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}";
+        git push "https://oauth2:$GITLAB_TOKEN@$CI_SERVER_HOST/a.khazaei/backend-argocd.git" HEAD:master;
+      fi
